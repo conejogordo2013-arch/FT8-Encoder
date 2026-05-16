@@ -3,6 +3,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32) && !defined(HAVE_STPCPY)
+static char* stpcpy(char* dst, const char* src)
+{
+    while (*src != '\0')
+    {
+        *dst++ = *src++;
+    }
+    *dst = '\0';
+    return dst;
+}
+#endif
+
 #define LOG_LEVEL LOG_WARN
 #include "debug.h"
 

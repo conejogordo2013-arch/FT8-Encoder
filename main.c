@@ -37,20 +37,39 @@ void my_ft8_encode(const char* msg, uint8_t* symbols)
 
 void generate_ft8_audio(const uint8_t* symbols, float* buffer, int* sample_count)
 {
-    const int samples_per_symbol = (int)(SAMPLE_RATE * SYMBOL_DURATION + 0.5f);
-    const int total_samples = SYMBOL_COUNT * samples_per_symbol;
-    *sample_count = total_samples;
+    const int samples_per_symbol = 1920; // 12000 * 0.16
+    const int silence_samples = SAMPLE_RATE; // 1 second
+    const int signal_samples = SYMBOL_COUNT * samples_per_symbol;
+    const int total_samples = signal_samples + 2 * silence_samples;
+    const float amplitude = 0.5f;
+    const float alpha = 0.03f; // smoothing factor for soft tone transitions
+
+    for (int i = 0; i < total_samples; ++i)
+    {
+        buffer[i] = 0.0f;
+    }
+
+    float phase = 0.0f;
+    float current_freq = BASE_FREQ + (float)symbols[0] * TONE_SPACING;
 
     for (int i = 0; i < SYMBOL_COUNT; ++i)
     {
-        const float freq = BASE_FREQ + (float)symbols[i] * TONE_SPACING;
+        const float target_freq = BASE_FREQ + (float)symbols[i] * TONE_SPACING;
         for (int n = 0; n < samples_per_symbol; ++n)
         {
-            int idx = i * samples_per_symbol + n;
-            float t = (float)idx / (float)SAMPLE_RATE;
-            buffer[idx] = sinf(2.0f * (float)M_PI * freq * t);
+            current_freq += alpha * (target_freq - current_freq);
+            phase += 2.0f * (float)M_PI * current_freq / (float)SAMPLE_RATE;
+            if (phase >= 2.0f * (float)M_PI)
+            {
+                phase = fmodf(phase, 2.0f * (float)M_PI);
+            }
+
+            const int idx = silence_samples + i * samples_per_symbol + n;
+            buffer[idx] = amplitude * sinf(phase);
         }
     }
+
+    *sample_count = total_samples;
 }
 
 void write_wav(const char* filename, float* buffer, int sample_count)
@@ -144,7 +163,7 @@ int main(int argc, char** argv)
     }
     printf("\n");
 
-    const int max_samples = SYMBOL_COUNT * (int)(SAMPLE_RATE * SYMBOL_DURATION + 0.5f);
+    const int max_samples = SYMBOL_COUNT * 1920 + 2 * SAMPLE_RATE;
     float* audio = (float*)malloc(sizeof(float) * (size_t)max_samples);
     if (!audio)
     {
